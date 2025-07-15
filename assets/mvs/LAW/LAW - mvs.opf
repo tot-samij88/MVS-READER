@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8'?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uuid_id" version="2.0">
+    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+        <dc:identifier opf:scheme="calibre" id="calibre_id">2</dc:identifier>
+        <dc:identifier opf:scheme="uuid" id="uuid_id">2018ee3e-a4d0-4e22-8f1a-c18e6cef0367</dc:identifier>
+        <dc:title>LAW</dc:title>
+        <dc:creator opf:file-as="mvs" opf:role="aut">mvs</dc:creator>
+        <dc:contributor opf:file-as="calibre" opf:role="bkp">calibre (8.5.0) [https://calibre-ebook.com]</dc:contributor>
+        <dc:date>2020-06-24T21:40:57+00:00</dc:date>
+        <dc:language>ru</dc:language>
+        <meta name="calibre:timestamp" content="2025-07-10T16:06:48.397044+00:00"/>
+        <meta name="calibre:title_sort" content="LAW"/>
+    </metadata>
+    <guide>
+        <reference type="cover" title="Обложка" href="LAW - mvs.jpg"/>
+    </guide>
+</package>
