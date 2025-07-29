@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:epubx/epubx.dart';
 import 'package:provider/provider.dart';
+import 'package:html/parser.dart' show parse;
 import '../providers/notes_provider.dart';
 
 class ReaderScreen extends StatefulWidget {
@@ -35,22 +36,27 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final book = await EpubReader.readBook(bytes.buffer.asUint8List());
 
     final textBuffer = StringBuffer();
-    book.Chapters?.forEach((chapter) {
-      if (chapter.HtmlContent != null) {
-        final content = chapter.HtmlContent!
-            .replaceAll(RegExp(r'<[^>]*>'), '')
-            .replaceAll('&nbsp;', ' ')
-            .trim();
-        textBuffer.writeln(content);
+
+    final htmlFiles = book.Content?.Html;
+    if (htmlFiles != null && htmlFiles.isNotEmpty) {
+      for (var htmlFile in htmlFiles.values) {
+        final htmlContent = htmlFile.Content;
+        final document = parse(htmlContent);
+        final text = document.body?.text.trim() ?? '';
+        textBuffer.writeln(text);
       }
-    });
+    }
 
     final allText = textBuffer.toString();
     final lines = const LineSplitter().convert(allText);
     const linesPerPage = 30;
     List<String> pages = [];
     for (int i = 0; i < lines.length; i += linesPerPage) {
-      pages.add(lines.sublist(i, i + linesPerPage > lines.length ? lines.length : i + linesPerPage).join('\n'));
+      pages.add(
+        lines
+            .sublist(i, (i + linesPerPage > lines.length) ? lines.length : i + linesPerPage)
+            .join('\n'),
+      );
     }
 
     setState(() {
@@ -58,6 +64,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       _isLoading = false;
     });
   }
+
 
   Future<void> _loadChapters() async {
     final jsonStr = await rootBundle.loadString('assets/chapters.json');
@@ -157,7 +164,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           padding: EdgeInsets.zero,
           children: _chapters.map((chapter) {
             return ListTile(
-              title: Text(chapter['title']),
+              title: Text(chapter['title'] ?? ''),
               onTap: () => _gotoChapter(chapter['page']),
             );
           }).toList(),
@@ -170,14 +177,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
         itemCount: _pages.length,
         itemBuilder: (_, index) {
           final pageText = _pages[index];
-          final isMatch = _searchQuery.isNotEmpty && pageText.contains(_searchQuery);
+          final isMatch = _searchQuery.isNotEmpty && pageText.toLowerCase().contains(_searchQuery.toLowerCase());
 
           return Padding(
             padding: const EdgeInsets.all(16),
             child: GestureDetector(
-              onLongPressStart: (details) {
-                // У майбутньому: відкрити меню для копіювання/збереження виділеного
-              },
+              onLongPressStart: (details) {},
               child: SelectableText.rich(
                 TextSpan(
                   children: [
@@ -191,12 +196,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
                               ? Colors.lightBlueAccent
                               : null),
                         ),
-                        recognizer: null,
                       ),
                   ],
                 ),
                 onSelectionChanged: (selection, cause) {
-                  final selected = selection.textInside(pageText).trim();
+                  final safeStart = selection.start.clamp(0, pageText.length);
+                  final safeEnd = selection.end.clamp(0, pageText.length);
+                  final safeRange = TextRange(start: safeStart, end: safeEnd);
+                  final selected = safeRange.textInside(pageText).trim();
                   setState(() {
                     _selectedText = selected;
                   });
