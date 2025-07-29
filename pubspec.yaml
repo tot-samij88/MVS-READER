@@ -33,3 +33,4 @@ flutter:
     - assets/2stChange.epub
     - assets/TEST.epub
     - assets/PROD.epub
+    - assets/TEST.html

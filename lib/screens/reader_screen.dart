@@ -32,7 +32,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Future<void> _loadBook() async {
-    final bytes = await rootBundle.load('assets/PROD.epub');
+    final bytes = await rootBundle.load('assets/TEST.html');
     final book = await EpubReader.readBook(bytes.buffer.asUint8List());
 
     final textBuffer = StringBuffer();
