@@ -1,18 +1,26 @@
 import 'package:flutter/material.dart';
-import '../models/note_model.dart';
 
-class NotesProvider extends ChangeNotifier {
-  final List<NoteModel> _notes = [];
+class Note {
+  final String content;
+  Note({required this.content});
+}
 
-  List<NoteModel> get notes => _notes;
+class NotesProvider with ChangeNotifier {
+  final List<Note> _notes = [];
+
+  List<Note> get notes => _notes;
 
   void addNote(String content) {
-    if (_notes.any((note) => note.content == content)) return;
-    _notes.add(NoteModel(content: content));
+    _notes.add(Note(content: content));
     notifyListeners();
   }
 
-  bool isHighlighted(String text) {
-    return _notes.any((note) => text.contains(note.content));
+  void removeNote(String content) {
+    _notes.removeWhere((note) => note.content == content);
+    notifyListeners();
+  }
+
+  bool isHighlighted(String word) {
+    return _notes.any((n) => n.content.contains(word));
   }
 }

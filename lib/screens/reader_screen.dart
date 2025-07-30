@@ -1,10 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:epubx/epubx.dart';
+import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:provider/provider.dart';
 import 'package:html/parser.dart' show parse;
-import '../providers/notes_provider.dart';
+import 'package:mvs_reader/providers/notes_provider.dart';
 
 class ReaderScreen extends StatefulWidget {
   const ReaderScreen({super.key});
@@ -13,64 +12,44 @@ class ReaderScreen extends StatefulWidget {
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
+// ⬇️ Фабрика для рендерингу зображень із assets
+class MyWidgetFactory extends WidgetFactory {
+  @override
+  String? get fileSchemeAsset => 'assets/Original_Dovidnik HTML Filter.files/';
+}
+
 class _ReaderScreenState extends State<ReaderScreen> {
   final PageController _pageController = PageController();
-  List<String> _pages = [];
-  List<Map<String, dynamic>> _chapters = [];
-  bool _isLoading = true;
-
+  List<String> _htmlPages = [];
   String _searchQuery = '';
   List<int> _searchMatches = [];
   int _currentMatchIndex = 0;
-  String _selectedText = '';
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadBook();
-    _loadChapters();
+    _loadHtml();
   }
 
-  Future<void> _loadBook() async {
-    final bytes = await rootBundle.load('assets/TEST.html');
-    final book = await EpubReader.readBook(bytes.buffer.asUint8List());
+  Future<void> _loadHtml() async {
+    final htmlRaw = await rootBundle.loadString('assets/TEST_Filter.html');
+    final document = parse(htmlRaw);
+    final body = document.body?.innerHtml ?? '';
 
-    final textBuffer = StringBuffer();
-
-    final htmlFiles = book.Content?.Html;
-    if (htmlFiles != null && htmlFiles.isNotEmpty) {
-      for (var htmlFile in htmlFiles.values) {
-        final htmlContent = htmlFile.Content;
-        final document = parse(htmlContent);
-        final text = document.body?.text.trim() ?? '';
-        textBuffer.writeln(text);
-      }
-    }
-
-    final allText = textBuffer.toString();
-    final lines = const LineSplitter().convert(allText);
-    const linesPerPage = 30;
+    // Пагінація по <p>
+    final paragraphs = body.split(RegExp(r'<p[^>]*>'));
+    const paragraphsPerPage = 20;
     List<String> pages = [];
-    for (int i = 0; i < lines.length; i += linesPerPage) {
-      pages.add(
-        lines
-            .sublist(i, (i + linesPerPage > lines.length) ? lines.length : i + linesPerPage)
-            .join('\n'),
-      );
+
+    for (int i = 0; i < paragraphs.length; i += paragraphsPerPage) {
+      final chunk = paragraphs.sublist(i, (i + paragraphsPerPage > paragraphs.length) ? paragraphs.length : i + paragraphsPerPage);
+      pages.add(chunk.join('<p>'));
     }
 
     setState(() {
-      _pages = pages;
+      _htmlPages = pages;
       _isLoading = false;
-    });
-  }
-
-
-  Future<void> _loadChapters() async {
-    final jsonStr = await rootBundle.loadString('assets/chapters.json');
-    final data = json.decode(jsonStr);
-    setState(() {
-      _chapters = List<Map<String, dynamic>>.from(data['chapters']);
     });
   }
 
@@ -79,29 +58,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
       _searchQuery = query;
       _searchMatches = [];
       _currentMatchIndex = 0;
-
-      for (int i = 0; i < _pages.length; i++) {
-        if (_pages[i].toLowerCase().contains(query.toLowerCase())) {
-          _searchMatches.add(i);
-        }
-      }
     });
+
+    for (int i = 0; i < _htmlPages.length; i++) {
+      if (_htmlPages[i].toLowerCase().contains(query.toLowerCase())) {
+        _searchMatches.add(i);
+      }
+    }
 
     if (_searchMatches.isNotEmpty) {
       _pageController.jumpToPage(_searchMatches[_currentMatchIndex]);
     }
-  }
-
-  void _highlightAndSave(String text, NotesProvider provider) {
-    provider.addNote(text);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Текст додано до нотаток")),
-    );
-  }
-
-  void _gotoChapter(int page) {
-    _pageController.jumpToPage(page);
-    Navigator.pop(context);
   }
 
   @override
@@ -110,25 +77,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('EPUB Читалка'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notes),
-            onPressed: () => Navigator.pushNamed(context, '/notes'),
-          )
-        ],
+        title: const Text('HTML Читалка'),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
+          preferredSize: const Size.fromHeight(56),
           child: Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: 'Пошук...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: const OutlineInputBorder(),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding: EdgeInsets.all(8),
                     ),
                     onSubmitted: _onSearch,
                   ),
@@ -159,72 +121,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ),
         ),
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: _chapters.map((chapter) {
-            return ListTile(
-              title: Text(chapter['title'] ?? ''),
-              onTap: () => _gotoChapter(chapter['page']),
-            );
-          }).toList(),
-        ),
-      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : PageView.builder(
         controller: _pageController,
-        itemCount: _pages.length,
+        itemCount: _htmlPages.length,
         itemBuilder: (_, index) {
-          final pageText = _pages[index];
-          final isMatch = _searchQuery.isNotEmpty && pageText.toLowerCase().contains(_searchQuery.toLowerCase());
-
-          return Padding(
+          return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-            child: GestureDetector(
-              onLongPressStart: (details) {},
-              child: SelectableText.rich(
-                TextSpan(
-                  children: [
-                    for (final word in pageText.split(' '))
-                      TextSpan(
-                        text: '$word ',
-                        style: TextStyle(
-                          backgroundColor: notesProvider.isHighlighted(word)
-                              ? Colors.yellow
-                              : (isMatch && word.toLowerCase().contains(_searchQuery.toLowerCase())
-                              ? Colors.lightBlueAccent
-                              : null),
-                        ),
-                      ),
-                  ],
-                ),
-                onSelectionChanged: (selection, cause) {
-                  final safeStart = selection.start.clamp(0, pageText.length);
-                  final safeEnd = selection.end.clamp(0, pageText.length);
-                  final safeRange = TextRange(start: safeStart, end: safeEnd);
-                  final selected = safeRange.textInside(pageText).trim();
-                  setState(() {
-                    _selectedText = selected;
-                  });
-                },
-              ),
+            child: HtmlWidget(
+              _htmlPages[index],
+              factoryBuilder: () => MyWidgetFactory(),
+              textStyle: const TextStyle(fontSize: 16),
             ),
           );
         },
       ),
-      floatingActionButton: _selectedText.isNotEmpty
-          ? FloatingActionButton.extended(
-        label: const Text("Додати до нотаток"),
-        icon: const Icon(Icons.save),
-        onPressed: () {
-          _highlightAndSave(_selectedText, notesProvider);
-          setState(() {
-            _selectedText = '';
-          });
-        },
-      )
-          : null,
     );
   }
 }
